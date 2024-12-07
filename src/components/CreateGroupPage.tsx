@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react'; // Add useEffect
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,14 @@ export default function CreateGroupPage() {
   const [newParticipantName, setNewParticipantName] = useState('');
   const [newParticipantPhone, setNewParticipantPhone] = useState(''); // Adicionar estado para o telefone
   const router = useRouter();
+
+  useEffect(() => {
+    const storedGroup = localStorage.getItem('secretSantaGroup');
+    if (storedGroup) {
+      const group = JSON.parse(storedGroup);
+      setParticipants(group.participants);
+    }
+  }, []);
 
   const addParticipant = () => {
     if (newParticipantName.trim() === '') return;
