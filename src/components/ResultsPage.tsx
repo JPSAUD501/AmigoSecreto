@@ -7,6 +7,7 @@ import copyToClipboard from 'clipboard-copy';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Copy, Download, Share2 } from 'lucide-react';
+import { useRouter } from 'next/navigation'; // Add this import
 
 interface Participant {
   id: string;
@@ -35,7 +36,12 @@ const getPastelColor = (name: string) => {
   return `hsl(${h}, 80%, 88%)`;
 };
 
+const shuffleArray = (array: Participant[]) => {
+  return array.sort(() => Math.random() - 0.5);
+};
+
 export default function ResultsPage() {
+  const router = useRouter(); // Initialize router
   const [group, setGroup] = useState<SecretSantaGroup | null>(null);
   const [copiedLinks, setCopiedLinks] = useState<{ [key: string]: boolean }>({});
 
@@ -89,12 +95,12 @@ export default function ResultsPage() {
     if (!phoneNumber) return;
 
     const message = 
-      `*Amigo Secreto - Sorteio Realizado!*\n\n` +
+      `*Amigo Secreto*\n\n` +
       `Olá, *${participant.name}*.\n` +
       `O sorteio do Amigo Secreto foi realizado com sucesso.\n` +
       `Para descobrir quem você tirou, acesse o link abaixo:\n\n` +
       `${link}\n\n` +
-      `*Importante:* Este link é pessoal e exclusivo para você.`;
+      `*Importante:* Este link é pessoal, não compartilhe!`;
 
     const encodedMessage = encodeURIComponent(message);
     const formattedPhone = phoneNumber.replace(/\D/g, '');
@@ -190,6 +196,40 @@ export default function ResultsPage() {
     doc.save('amigo_secreto_completo.pdf');
   };
 
+  const sortAgain = () => {
+    if (!group) return;
+  
+    // Realizar o sorteio novamente
+    const shuffledParticipants = [...group.participants];
+    
+    // Algoritmo de Fisher-Yates para embaralhar
+    for (let i = shuffledParticipants.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledParticipants[i], shuffledParticipants[j]] = [shuffledParticipants[j], shuffledParticipants[i]];
+    }
+  
+    // Preparar os novos resultados do sorteio
+    const newDrawResults: { [key: string]: string } = {};
+    for (let i = 0; i < shuffledParticipants.length; i++) {
+      const currentPerson = shuffledParticipants[i];
+      const nextPerson = shuffledParticipants[(i + 1) % shuffledParticipants.length];
+      newDrawResults[currentPerson.id] = nextPerson.id;
+    }
+  
+    // Atualizar o grupo com os novos resultados
+    const newGroup = {
+      ...group,
+      drawResults: newDrawResults,
+      groupId: Date.now().toString(),
+    };
+  
+    // Salvar no localStorage
+    localStorage.setItem('secretSantaGroup', JSON.stringify(newGroup));
+  
+    // Atualizar o estado
+    setGroup(newGroup);
+  };
+
   return (
     <div className="max-w-2xl mx-auto p-4">
       <Card>
@@ -203,7 +243,7 @@ export default function ResultsPage() {
           </p>
 
           <div className="space-y-4 mb-6">
-            {group?.participants.map((participant) => (
+            {group && shuffleArray([...group.participants]).map((participant) => (
               <div 
                 key={participant.id}
                 className="bg-gray-50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:justify-between"
@@ -253,10 +293,24 @@ export default function ResultsPage() {
 
           <Button 
             onClick={exportReport} 
-            className="w-full"
+            className="w-full mb-4"
           >
             <Download className="w-4 h-4 mr-2" />
             Baixar Relatório
+          </Button>
+          <Button 
+            onClick={() => router.push('/')} 
+            variant="secondary" 
+            className="w-full mb-4"
+          >
+            Voltar e Editar Participantes
+          </Button>
+          <Button 
+            onClick={sortAgain} 
+            variant="secondary" 
+            className="w-full"
+          >
+            Sortear Novamente
           </Button>
         </CardContent>
       </Card>
