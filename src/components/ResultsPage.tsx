@@ -141,14 +141,15 @@ export default function ResultsPage() {
     // Close the cycle by adding the first participant again
     cycle.push(cycle[0]);
 
-    // Create a string representation of the cycle
+    // Create a string representation of the cycle with line breaks
     const cycleString = cycle.join(' -> ');
+    const cycleLines = doc.splitTextToSize(cycleString, doc.internal.pageSize.width - 28);
 
     // Add the cycle to the PDF
     doc.setFontSize(14);
     doc.text('Ciclo de Participantes:', 14, 60);
     doc.setFontSize(12);
-    doc.text(cycleString, 14, 70);
+    doc.text(cycleLines, 14, 70);
 
     const tableData = group?.participants.map(participant => {
       const drawnParticipantId = group.drawResults[participant.id];
