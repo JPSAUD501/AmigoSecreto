@@ -142,7 +142,7 @@ export default function ResultsPage() {
     cycle.push(cycle[0]);
 
     // Create a string representation of the cycle with line breaks
-    const cycleString = cycle.join(' -> ');
+    const cycleString = cycle.join(' > ');
     const cycleLines = doc.splitTextToSize(cycleString, doc.internal.pageSize.width - 28);
 
     // Add the cycle to the PDF
