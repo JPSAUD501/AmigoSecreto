@@ -67,7 +67,7 @@ export default function ResultsPage() {
     const userEncoded = btoa(encodeURIComponent(participant.name));
     const resultEncoded = btoa(encodeURIComponent(drawnParticipant.name));
 
-    return `${baseUrl}/result?user=${userEncoded}&result=${resultEncoded}`;
+    return `${baseUrl}/result?u=${userEncoded}&f=${resultEncoded}`;
   };
 
   const copyLink = (participantId: string) => {
@@ -193,7 +193,7 @@ export default function ResultsPage() {
       );
     }
 
-    doc.save('amigo_secreto_completo.pdf');
+    doc.save(`amigo-secreto-${group.groupId}.pdf`);
   };
 
   const sortAgain = () => {

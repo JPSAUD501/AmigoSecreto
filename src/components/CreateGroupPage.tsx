@@ -16,6 +16,9 @@ export default function CreateGroupPage() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [newParticipantName, setNewParticipantName] = useState('');
   const [newParticipantPhone, setNewParticipantPhone] = useState(''); // Adicionar estado para o telefone
+  const [editingParticipantId, setEditingParticipantId] = useState<string | null>(null);
+  const [editedName, setEditedName] = useState('');
+  const [editedPhone, setEditedPhone] = useState('');
   const router = useRouter();
 
   useEffect(() => {
@@ -50,6 +53,25 @@ export default function CreateGroupPage() {
     setParticipants(participants.filter(p => p.id !== id));
   };
 
+  const startEditing = (participant: Participant) => {
+    setEditingParticipantId(participant.id);
+    setEditedName(participant.name);
+    setEditedPhone(participant.phone || '');
+  };
+
+  const saveEdit = (id: string) => {
+    setParticipants(participants.map(p => p.id === id ? { ...p, name: editedName, phone: editedPhone || undefined } : p));
+    setEditingParticipantId(null);
+    setEditedName('');
+    setEditedPhone('');
+  };
+
+  const cancelEdit = () => {
+    setEditingParticipantId(null);
+    setEditedName('');
+    setEditedPhone('');
+  };
+
   const finishGroup = () => {
     if (participants.length < 3) {
       alert('É necessário ter pelo menos 3 participantes para o sorteio.');
@@ -82,12 +104,26 @@ export default function CreateGroupPage() {
     }));
 
     // Navegar para a página de resultados
-    router.push('/results');
+    router.push('/group/result');
+  };
+
+  const saveGroup = () => {
+    if (participants.length === 0) {
+      alert('Adicione pelo menos um participante antes de salvar.');
+      return;
+    }
+
+    localStorage.setItem('secretSantaGroup', JSON.stringify({
+      participants: participants,
+      groupId: Date.now().toString()
+    }));
+
+    alert('Grupo salvo com sucesso!');
   };
 
   return (
-    <div className="max-w-md mx-auto p-4">
-      <Card>
+    <div className="max-w-[500px] mx-auto p-4">
+      <Card className="w-full">
         <CardHeader>
           <CardTitle>Criar Grupo de Amigo Secreto</CardTitle>
         </CardHeader>
@@ -119,29 +155,69 @@ export default function CreateGroupPage() {
                 {participants.map(participant => (
                   <li 
                     key={participant.id} 
-                    className="flex justify-between items-center bg-gray-100 p-2 rounded mb-2"
+                    className="flex justify-between items-start bg-gray-100 p-3 rounded mb-2 min-h-[80px] gap-4"
                   >
-                    {participant.name}
-                    <Button 
-                      variant="destructive" 
-                      size="sm" 
-                      onClick={() => removeParticipant(participant.id)}
-                    >
-                      Remover
-                    </Button>
+                    {editingParticipantId === participant.id ? (
+                      <>
+                        <div className="flex-1 max-w-[60%]">
+                          <Input 
+                            type="text" 
+                            value={editedName}
+                            onChange={(e) => setEditedName(e.target.value)}
+                            className="mb-2"
+                          />
+                          <Input 
+                            type="tel" 
+                            value={editedPhone}
+                            onChange={(e) => setEditedPhone(e.target.value)}
+                            className="mb-2"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2 w-[100px]">
+                          <Button size="sm" onClick={() => saveEdit(participant.id)}>Salvar</Button>
+                          <Button size="sm" variant="outline" onClick={cancelEdit}>Cancelar</Button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex-1 max-w-[60%]">
+                          <span className="font-medium block">{participant.name}</span>
+                          {participant.phone && (
+                          <span className="text-sm text-gray-600 mt-1 block">{participant.phone}</span>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-2 w-[100px]">
+                          <Button size="sm" variant="outline" onClick={() => startEditing(participant)}>
+                            Editar
+                          </Button>
+                          <Button size="sm" variant="destructive" onClick={() => removeParticipant(participant.id)}>
+                            Remover
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </li>
                 ))}
               </ul>
             )}
           </div>
 
-          <Button 
-            onClick={finishGroup} 
-            disabled={participants.length < 3}
-            className="w-full"
-          >
-            Finalizar Grupo e Sortear
-          </Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button 
+              onClick={saveGroup} 
+              variant="outline"
+              className="w-full"
+            >
+              Salvar Grupo
+            </Button>
+            <Button 
+              onClick={finishGroup} 
+              disabled={participants.length < 3}
+              className="w-full"
+            >
+              Finalizar Grupo e Sortear
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

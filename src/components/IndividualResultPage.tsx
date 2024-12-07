@@ -41,8 +41,8 @@ function IndividualResultContent() {
 
   useEffect(() => {
     try {
-      const userParam = searchParams.get('user');
-      const resultParam = searchParams.get('result');
+      const userParam = searchParams.get('u');
+      const resultParam = searchParams.get('f');
 
       if (!userParam || !resultParam) {
         setError('Link inválido. Verifique o link recebido.');
