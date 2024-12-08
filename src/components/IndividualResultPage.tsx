@@ -3,16 +3,33 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import ReactConfetti from 'react-confetti';
 
 function IndividualResultContent() {
   const searchParams = useSearchParams();
   const [userName, setUserName] = useState('');
   const [drawnName, setDrawnName] = useState('');
   const [error, setError] = useState('');
-
-  // New state variables for animation
   const [displayedName, setDisplayedName] = useState('');
   const [isRevealed, setIsRevealed] = useState(false);
+  const [windowDimensions, setWindowDimensions] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    setWindowDimensions({
+      width: window.innerWidth,
+      height: window.innerHeight
+    });
+
+    const handleResize = () => {
+      setWindowDimensions({
+        width: window.innerWidth,
+        height: window.innerHeight
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const startNameAnimation = useCallback((finalName: string) => {
     const names = [
@@ -20,7 +37,7 @@ function IndividualResultContent() {
       'José', 'Fernanda', 'Luisa', 'Paulo', 'Mariana', 'Rafael'
     ];
 
-    const animationDuration = 3000; // Duration of the animation in milliseconds
+    const animationDuration = 2500; // Duration of the animation in milliseconds
     const intervalDuration = 100;   // Interval between name changes
 
     const intervalId: NodeJS.Timeout = setInterval(() => {
@@ -78,7 +95,15 @@ function IndividualResultContent() {
   }
 
   return (
-    <div className="max-w-md mx-auto p-4">
+    <div className="max-w-md mx-auto p-4 w-full">
+      {isRevealed && (
+        <ReactConfetti
+          width={windowDimensions.width}
+          height={windowDimensions.height}
+          recycle={false}
+          numberOfPieces={500}
+        />
+      )}
       <Card>
         <CardHeader>
           <CardTitle>Resultado do Amigo Secreto</CardTitle>
@@ -96,13 +121,20 @@ function IndividualResultContent() {
                 </>
               ) : (
                 <>
-                  <p className="text-2xl font-bold text-blue-600 animate-pulse">{displayedName}</p>
+                  <p
+                    className="text-2xl font-bold text-blue-600"
+                    style={{ filter: 'blur(2px)' }}
+                  >
+                    {displayedName}
+                  </p>
                   <p className="text-sm text-gray-600 mt-2">Descobrindo seu amigo secreto...</p>
                 </>
               )}
             </div>
             <p className="text-sm text-gray-500">
-              Lembre-se de manter o nome em segredo. Boa sorte na escolha do presente!
+              Lembre-se de manter o nome em segredo.
+              <br/>
+              Boa sorte na escolha do presente!
             </p>
           </div>
         </CardContent>
