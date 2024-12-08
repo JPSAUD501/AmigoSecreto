@@ -47,10 +47,12 @@ export default function CreateGroupPage() {
     setParticipants([...participants, newParticipant]);
     setNewParticipantName('');
     setNewParticipantPhone(''); // Limpar campo do telefone após adicionar
+    saveGroup();
   };
 
   const removeParticipant = (id: string) => {
     setParticipants(participants.filter(p => p.id !== id));
+    saveGroup();
   };
 
   const startEditing = (participant: Participant) => {
@@ -64,6 +66,7 @@ export default function CreateGroupPage() {
     setEditingParticipantId(null);
     setEditedName('');
     setEditedPhone('');
+    saveGroup();
   };
 
   const cancelEdit = () => {
@@ -117,12 +120,10 @@ export default function CreateGroupPage() {
       participants: participants,
       groupId: Date.now().toString()
     }));
-
-    alert('Grupo salvo com sucesso!');
   };
 
   return (
-    <div className="max-w-[500px] mx-auto p-4">
+    <div className="max-w-[500px] mx-auto p-4 w-full">
       <Card className="w-full">
         <CardHeader>
           <CardTitle>Criar Grupo de Amigo Secreto</CardTitle>
@@ -202,14 +203,7 @@ export default function CreateGroupPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <Button 
-              onClick={saveGroup} 
-              variant="outline"
-              className="w-full"
-            >
-              Salvar Grupo
-            </Button>
+          <div className="grid grid-cols-1 gap-2">
             <Button 
               onClick={finishGroup} 
               disabled={participants.length < 3}

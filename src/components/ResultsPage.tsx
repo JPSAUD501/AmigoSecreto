@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import copyToClipboard from 'clipboard-copy';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Copy, Download, Share2 } from 'lucide-react';
+import { Copy, Download, Share2, Check, Eye, EyeOff } from 'lucide-react';
 import { useRouter } from 'next/navigation'; // Add this import
 
 interface Participant {
@@ -36,14 +36,12 @@ const getPastelColor = (name: string) => {
   return `hsl(${h}, 80%, 88%)`;
 };
 
-const shuffleArray = (array: Participant[]) => {
-  return array.sort(() => Math.random() - 0.5);
-};
-
 export default function ResultsPage() {
   const router = useRouter(); // Initialize router
   const [group, setGroup] = useState<SecretSantaGroup | null>(null);
   const [copiedLinks, setCopiedLinks] = useState<{ [key: string]: boolean }>({});
+  const [redrawn, setRedrawn] = useState(false);
+  const [showDrawnParticipants, setShowDrawnParticipants] = useState(false);
 
   useEffect(() => {
     const storedGroup = localStorage.getItem('secretSantaGroup');
@@ -151,6 +149,9 @@ export default function ResultsPage() {
     doc.setFontSize(12);
     doc.text(cycleLines, 14, 70);
 
+    const cycleHeight = doc.getTextDimensions(cycleLines.join(' ')).h * cycleLines.length;
+    const tableStartY = 70 + cycleHeight + 5;
+
     const tableData = group?.participants.map(participant => {
       const drawnParticipantId = group.drawResults[participant.id];
       const drawnParticipant = getParticipantById(drawnParticipantId);
@@ -161,7 +162,7 @@ export default function ResultsPage() {
     });
 
     autoTable(doc, {
-      startY: 80,
+      startY: tableStartY,
       head: [['Participante', 'Tirou']],
       body: tableData,
       theme: 'grid',
@@ -194,7 +195,7 @@ export default function ResultsPage() {
       );
     }
 
-    doc.save(`amigo-secreto-${group.groupId}.pdf`);
+    doc.save('amigo-secreto.pdf');
   };
 
   const sortAgain = () => {
@@ -229,11 +230,23 @@ export default function ResultsPage() {
   
     // Atualizar o estado
     setGroup(newGroup);
+
+    // Adicionar feedback visual
+    setRedrawn(true);
+    setTimeout(() => {
+      setRedrawn(false);
+    }, 3000);
   };
 
   return (
     <div className="max-w-2xl mx-auto p-4">
       <Card>
+        {redrawn && (
+          <div className="bg-green-100 border-green-500 p-4 mb-4 flex items-center gap-2">
+            <Check className="w-5 h-5 text-green-500" />
+            <p className="text-green-700">Sorteio realizado com sucesso!</p>
+          </div>
+        )}
         <CardHeader>
           <CardTitle>Resultado do Sorteio</CardTitle>
         </CardHeader>
@@ -243,22 +256,49 @@ export default function ResultsPage() {
             Cada pessoa só verá quem ela tirou ao acessar seu próprio link.
           </p>
 
+          <Button 
+            onClick={() => setShowDrawnParticipants(!showDrawnParticipants)} 
+            variant="secondary" 
+            className="w-full mb-4"
+          >
+            {showDrawnParticipants ? (
+              <>
+                <EyeOff className="w-4 h-4 mr-2" />
+                Ocultar Quem Cada Um Tirou
+              </>
+            ) : (
+              <>
+                <Eye className="w-4 h-4 mr-2" />
+                Mostrar Quem Cada Um Tirou
+              </>
+            )}
+          </Button>
+
           <div className="space-y-4 mb-6">
-            {group && shuffleArray([...group.participants]).map((participant) => (
+            {group && group.participants.map((participant) => (
               <div 
                 key={participant.id}
                 className="bg-gray-50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:justify-between"
               >
-                <div className="flex items-center gap-3 w-full sm:w-auto">
-                  <div
-                    className="w-12 h-12 rounded-full flex items-center justify-center text-gray-800 font-semibold text-lg"
-                    style={{ 
-                      backgroundColor: getPastelColor(participant.name),
-                    }}
-                  >
-                    {getInitials(participant.name)}
+                <div className="flex items-center gap-3 w-full sm:w-auto flex-col sm:flex-row">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-12 h-12 rounded-full flex items-center justify-center text-gray-800 font-semibold text-lg"
+                      style={{ 
+                        backgroundColor: getPastelColor(participant.name),
+                      }}
+                    >
+                      {getInitials(participant.name)}
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-medium">{participant.name}</span>
+                      {showDrawnParticipants && (
+                        <span className="text-xs text-gray-500 italic">
+                          Tirou: {getParticipantById(group.drawResults[participant.id])?.name}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <span className="font-medium">{participant.name}</span>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                   <Button
