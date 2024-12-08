@@ -42,11 +42,15 @@ export default function ResultsPage() {
   const [copiedLinks, setCopiedLinks] = useState<{ [key: string]: boolean }>({});
   const [redrawn, setRedrawn] = useState(false);
   const [showDrawnParticipants, setShowDrawnParticipants] = useState(false);
+  const [displayOrder, setDisplayOrder] = useState<string[]>([]); // Add this line
 
   useEffect(() => {
     const storedGroup = localStorage.getItem('secretSantaGroup');
     if (storedGroup) {
-      setGroup(JSON.parse(storedGroup));
+      const parsedGroup = JSON.parse(storedGroup);
+      setGroup(parsedGroup);
+      // Initialize display order
+      setDisplayOrder(parsedGroup.participants.map((p: Participant) => p.id));
     }
   }, []);
 
@@ -201,16 +205,15 @@ export default function ResultsPage() {
   const sortAgain = () => {
     if (!group) return;
   
-    // Realizar o sorteio novamente
     const shuffledParticipants = [...group.participants];
     
-    // Algoritmo de Fisher-Yates para embaralhar
+    // Fisher-Yates shuffle for draw results
     for (let i = shuffledParticipants.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [shuffledParticipants[i], shuffledParticipants[j]] = [shuffledParticipants[j], shuffledParticipants[i]];
     }
   
-    // Preparar os novos resultados do sorteio
+    // Prepare new draw results
     const newDrawResults: { [key: string]: string } = {};
     for (let i = 0; i < shuffledParticipants.length; i++) {
       const currentPerson = shuffledParticipants[i];
@@ -218,20 +221,22 @@ export default function ResultsPage() {
       newDrawResults[currentPerson.id] = nextPerson.id;
     }
   
-    // Atualizar o grupo com os novos resultados
+    // Shuffle display order separately
+    const newDisplayOrder = [...group.participants.map(p => p.id)];
+    for (let i = newDisplayOrder.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [newDisplayOrder[i], newDisplayOrder[j]] = [newDisplayOrder[j], newDisplayOrder[i]];
+    }
+    setDisplayOrder(newDisplayOrder);
+  
     const newGroup = {
       ...group,
       drawResults: newDrawResults,
       groupId: Date.now().toString(),
     };
   
-    // Salvar no localStorage
     localStorage.setItem('secretSantaGroup', JSON.stringify(newGroup));
-  
-    // Atualizar o estado
     setGroup(newGroup);
-
-    // Adicionar feedback visual
     setRedrawn(true);
     setTimeout(() => {
       setRedrawn(false);
@@ -255,81 +260,92 @@ export default function ResultsPage() {
             Compartilhe o link individual com cada participante.
             Cada pessoa só verá quem ela tirou ao acessar seu próprio link.
           </p>
-
-          <Button 
-            onClick={() => setShowDrawnParticipants(!showDrawnParticipants)} 
-            variant="secondary" 
-            className="w-full mb-4"
-          >
-            {showDrawnParticipants ? (
-              <>
-                <EyeOff className="w-4 h-4 mr-2" />
-                Ocultar Quem Cada Um Tirou
-              </>
-            ) : (
-              <>
-                <Eye className="w-4 h-4 mr-2" />
-                Mostrar Quem Cada Um Tirou
-              </>
-            )}
-          </Button>
+          <div className="grid grid-rows-2 sm:grid-cols-1">
+            <Button 
+              onClick={sortAgain} 
+              variant="secondary" 
+              className="w-full"
+            >
+              Sortear Novamente
+            </Button>
+            <Button 
+              onClick={() => setShowDrawnParticipants(!showDrawnParticipants)} 
+              variant="secondary" 
+              className="w-full mb-4"
+            >
+              {showDrawnParticipants ? (
+                <>
+                  <EyeOff className="w-4 h-4 mr-2" />
+                  Ocultar Quem Cada Um Tirou
+                </>
+              ) : (
+                <>
+                  <Eye className="w-4 h-4 mr-2" />
+                  Mostrar Quem Cada Um Tirou
+                </>
+              )}
+            </Button>
+          </div>
 
           <div className="space-y-4 mb-6">
-            {group && group.participants.map((participant) => (
-              <div 
-                key={participant.id}
-                className="bg-gray-50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:justify-between"
-              >
-                <div className="flex items-center gap-3 w-full sm:w-auto flex-col sm:flex-row">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-12 h-12 rounded-full flex items-center justify-center text-gray-800 font-semibold text-lg"
-                      style={{ 
-                        backgroundColor: getPastelColor(participant.name),
-                      }}
-                    >
-                      {getInitials(participant.name)}
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{participant.name}</span>
-                      {showDrawnParticipants && (
-                        <span className="text-xs text-gray-500 italic">
-                          Tirou: {getParticipantById(group.drawResults[participant.id])?.name}
-                        </span>
-                      )}
+            {group && displayOrder.map((participantId) => {
+              const participant = group.participants.find(p => p.id === participantId)!;
+              return (
+                <div 
+                  key={participant.id}
+                  className="bg-gray-50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:justify-between"
+                >
+                  <div className="flex items-center gap-3 w-full sm:w-auto flex-col sm:flex-row">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-12 h-12 rounded-full flex items-center justify-center text-gray-800 font-semibold text-lg"
+                        style={{ 
+                          backgroundColor: getPastelColor(participant.name),
+                        }}
+                      >
+                        {getInitials(participant.name)}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{participant.name}</span>
+                        {showDrawnParticipants && (
+                          <span className="text-xs text-gray-500 italic">
+                            Tirou: {getParticipantById(group.drawResults[participant.id])?.name}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                  <Button
-                    size="sm"
-                    onClick={() => copyLink(participant.id)}
-                    variant="outline"
-                    className="w-full sm:w-auto"
-                  >
-                    {copiedLinks[participant.id] ? (
-                      'Copiado!'
-                    ) : (
-                      <>
-                        <Copy className="w-4 h-4 mr-1" />
-                        Copiar Link
-                      </>
-                    )}
-                  </Button>
-                  {participant.phone && (
+                  <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                     <Button
                       size="sm"
-                      onClick={() => sendWhatsApp(participant.id)}
+                      onClick={() => copyLink(participant.id)}
                       variant="outline"
                       className="w-full sm:w-auto"
                     >
-                      <Share2 className="w-4 h-4 mr-1" />
-                      WhatsApp
+                      {copiedLinks[participant.id] ? (
+                        'Copiado!'
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4 mr-1" />
+                          Copiar Link
+                        </>
+                      )}
                     </Button>
-                  )}
+                    {participant.phone && (
+                      <Button
+                        size="sm"
+                        onClick={() => sendWhatsApp(participant.id)}
+                        variant="outline"
+                        className="w-full sm:w-auto"
+                      >
+                        <Share2 className="w-4 h-4 mr-1" />
+                        WhatsApp
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <Button 
@@ -345,13 +361,6 @@ export default function ResultsPage() {
             className="w-full mb-4"
           >
             Voltar e Editar Participantes
-          </Button>
-          <Button 
-            onClick={sortAgain} 
-            variant="secondary" 
-            className="w-full"
-          >
-            Sortear Novamente
           </Button>
         </CardContent>
       </Card>
