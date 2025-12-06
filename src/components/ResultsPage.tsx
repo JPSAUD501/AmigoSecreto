@@ -13,6 +13,7 @@ interface Participant {
   id: string;
   name: string;
   phone?: string;
+  blacklist?: string[];
 }
 
 interface SecretSantaGroup {
@@ -202,23 +203,53 @@ export default function ResultsPage() {
     doc.save('amigo-secreto.pdf');
   };
 
+  const performDraw = (): { [key: string]: string } | null => {
+    if (!group) return null;
+    const maxAttempts = 1000;
+    
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const shuffled = [...group.participants];
+      
+      // Algoritmo de Fisher-Yates para embaralhar
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      
+      // Tentar criar o sorteio circular
+      const drawResults: { [key: string]: string } = {};
+      let valid = true;
+      
+      for (let i = 0; i < shuffled.length; i++) {
+        const currentPerson = shuffled[i];
+        const nextPerson = shuffled[(i + 1) % shuffled.length];
+        
+        // Verificar se a pessoa pode tirar a próxima
+        const blacklist = currentPerson.blacklist || [];
+        if (blacklist.includes(nextPerson.id)) {
+          valid = false;
+          break;
+        }
+        
+        drawResults[currentPerson.id] = nextPerson.id;
+      }
+      
+      if (valid) {
+        return drawResults;
+      }
+    }
+    
+    return null;
+  };
+
   const sortAgain = () => {
     if (!group) return;
   
-    const shuffledParticipants = [...group.participants];
+    const newDrawResults = performDraw();
     
-    // Fisher-Yates shuffle for draw results
-    for (let i = shuffledParticipants.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffledParticipants[i], shuffledParticipants[j]] = [shuffledParticipants[j], shuffledParticipants[i]];
-    }
-  
-    // Prepare new draw results
-    const newDrawResults: { [key: string]: string } = {};
-    for (let i = 0; i < shuffledParticipants.length; i++) {
-      const currentPerson = shuffledParticipants[i];
-      const nextPerson = shuffledParticipants[(i + 1) % shuffledParticipants.length];
-      newDrawResults[currentPerson.id] = nextPerson.id;
+    if (!newDrawResults) {
+      alert('Não foi possível realizar o sorteio com as restrições atuais. Por favor, revise as listas de exclusão (blacklists) dos participantes.');
+      return;
     }
   
     // Shuffle display order separately
