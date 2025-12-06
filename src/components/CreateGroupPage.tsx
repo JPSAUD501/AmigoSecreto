@@ -57,10 +57,16 @@ export default function CreateGroupPage() {
       return;
     }
 
-    setParticipants([...participants, newParticipant]);
+    const updatedParticipants = [...participants, newParticipant];
+    setParticipants(updatedParticipants);
     setNewParticipantName('');
     setNewParticipantPhone(''); // Limpar campo do telefone após adicionar
-    saveGroup();
+    
+    // Save with updated participants list
+    localStorage.setItem('secretSantaGroup', JSON.stringify({
+      participants: updatedParticipants,
+      groupId: Date.now().toString()
+    }));
   };
 
   const removeParticipant = (id: string) => {
@@ -161,6 +167,11 @@ export default function CreateGroupPage() {
               type="text" 
               value={newParticipantName}
               onChange={(e) => setNewParticipantName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  addParticipant();
+                }
+              }}
               placeholder="Nome do participante" 
               className="mb-2"
             />
@@ -168,6 +179,11 @@ export default function CreateGroupPage() {
               type="tel"
               value={newParticipantPhone}
               onChange={(e) => setNewParticipantPhone(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  addParticipant();
+                }
+              }}
               placeholder="Número de telefone (opcional)"
               className="mb-2"
             />

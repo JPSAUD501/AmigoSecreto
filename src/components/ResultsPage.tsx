@@ -149,15 +149,25 @@ export default function ResultsPage() {
     const tableData = group?.participants.map(participant => {
       const drawnParticipantId = group.drawResults[participant.id];
       const drawnParticipant = getParticipantById(drawnParticipantId);
+      
+      // Get blacklist names
+      const blacklistNames = participant.blacklist && participant.blacklist.length > 0
+        ? participant.blacklist
+            .map(id => getParticipantById(id)?.name)
+            .filter(name => name)
+            .join(', ')
+        : 'Nenhuma';
+      
       return [
         participant.name,
-        drawnParticipant?.name || ''
+        drawnParticipant?.name || '',
+        blacklistNames
       ];
     });
 
     autoTable(doc, {
       startY: tableStartY,
-      head: [['Participante', 'Tirou']],
+      head: [['Participante', 'Tirou', 'Restrições']],
       body: tableData,
       theme: 'grid',
       styles: {
@@ -171,8 +181,9 @@ export default function ResultsPage() {
         fontStyle: 'bold',
       },
       columnStyles: {
-        0: { fontStyle: 'bold', cellWidth: 95 },
-        1: { fontStyle: 'bold', cellWidth: 95 }
+        0: { fontStyle: 'bold', cellWidth: 60 },
+        1: { fontStyle: 'bold', cellWidth: 60 },
+        2: { cellWidth: 70 }
       },
     });
 
