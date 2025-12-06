@@ -8,7 +8,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Copy, Download, Share2, Check, Eye, EyeOff } from 'lucide-react';
 import { useRouter } from 'next/navigation'; // Add this import
-import { performDraw } from '@/lib/drawUtils';
+import { performDraw, extractCycles } from '@/lib/drawUtils';
 import type { Participant, SecretSantaGroup } from '@/types/participant';
 
 const getInitials = (name: string) => {
@@ -50,7 +50,11 @@ export default function ResultsPage() {
 
   const generatePersonalLink = (participantId: string) => {
     const participant = getParticipantById(participantId);
-    const drawnParticipantId = group?.drawResults[participantId] || '';
+    const drawnParticipantId = group?.drawResults[participantId];
+    
+    // Check if this participant was assigned someone in the draw
+    if (!drawnParticipantId) return '';
+    
     const drawnParticipant = getParticipantById(drawnParticipantId);
 
     if (!participant || !drawnParticipant) return '';
@@ -119,36 +123,64 @@ export default function ResultsPage() {
     doc.setFontSize(14);
     doc.text(`Total de participantes: ${group?.participants.length || 0}`, 14, 50);
 
-    // Generate the cycle of names
-    const cycle = [];
-    let currentParticipantId = group.participants[0].id;
-
-    do {
-      const participant = getParticipantById(currentParticipantId);
-      if (!participant) break;
-      cycle.push(participant.name);
-      currentParticipantId = group.drawResults[currentParticipantId];
-    } while (currentParticipantId !== group.participants[0].id);
-
-    // Close the cycle by adding the first participant again
-    cycle.push(cycle[0]);
-
-    // Create a string representation of the cycle with line breaks
-    const cycleString = cycle.join(' > ');
-    const cycleLines = doc.splitTextToSize(cycleString, doc.internal.pageSize.width - 28);
-
-    // Add the cycle to the PDF
-    doc.setFontSize(14);
-    doc.text('Ciclo de Participantes:', 14, 60);
-    doc.setFontSize(12);
-    doc.text(cycleLines, 14, 70);
-
-    const cycleHeight = doc.getTextDimensions(cycleLines.join(' ')).h * cycleLines.length;
-    const tableStartY = 70 + cycleHeight + 5;
+    // Extract cycles from the draw results
+    const cycles = extractCycles(
+      group.drawResults, 
+      group.participants.map(p => p.id)
+    );
+    
+    let tableStartY = 58;
+    
+    // Display cycles
+    if (cycles.length === 1) {
+      // Single cycle - traditional circular draw
+      const cycle = cycles[0].map(id => {
+        const participant = getParticipantById(id);
+        return participant?.name || '';
+      });
+      cycle.push(cycle[0]); // Close the cycle
+      
+      const cycleString = cycle.join(' > ');
+      const cycleLines = doc.splitTextToSize(cycleString, doc.internal.pageSize.width - 28);
+      
+      doc.setFontSize(14);
+      doc.text('Ciclo de Participantes:', 14, 66);
+      doc.setFontSize(12);
+      doc.text(cycleLines, 14, 76);
+      
+      const cycleHeight = doc.getTextDimensions(cycleLines.join(' ')).h * cycleLines.length;
+      tableStartY = 76 + cycleHeight + 5;
+    } else if (cycles.length > 1) {
+      // Multiple cycles - non-circular draw
+      doc.setFontSize(12);
+      doc.setTextColor(0, 0, 150);
+      doc.text(`(Sorteio com ${cycles.length} círculos)`, 14, 58);
+      doc.setTextColor(0, 0, 0);
+      
+      let currentY = 66;
+      cycles.forEach((cycle, index) => {
+        const cycleNames = cycle.map(id => {
+          const participant = getParticipantById(id);
+          return participant?.name || '';
+        });
+        cycleNames.push(cycleNames[0]); // Close the cycle
+        
+        const cycleString = `Círculo ${index + 1}: ${cycleNames.join(' > ')}`;
+        const cycleLines = doc.splitTextToSize(cycleString, doc.internal.pageSize.width - 28);
+        
+        doc.setFontSize(12);
+        doc.text(cycleLines, 14, currentY);
+        
+        const cycleHeight = doc.getTextDimensions(cycleLines.join(' ')).h * cycleLines.length;
+        currentY += cycleHeight + 3;
+      });
+      
+      tableStartY = currentY + 5;
+    }
 
     const tableData = group?.participants.map(participant => {
       const drawnParticipantId = group.drawResults[participant.id];
-      const drawnParticipant = getParticipantById(drawnParticipantId);
+      const drawnParticipant = drawnParticipantId ? getParticipantById(drawnParticipantId) : null;
       
       // Get blacklist names
       const blacklistNames = participant.blacklist && participant.blacklist.length > 0
@@ -160,7 +192,7 @@ export default function ResultsPage() {
       
       return [
         participant.name,
-        drawnParticipant?.name || '',
+        drawnParticipant?.name || 'Erro',
         blacklistNames
       ];
     });
@@ -246,6 +278,20 @@ export default function ResultsPage() {
         )}
         <CardHeader>
           <CardTitle>Resultado do Sorteio</CardTitle>
+          {group && (() => {
+            const cycles = extractCycles(
+              group.drawResults,
+              group.participants.map(p => p.id)
+            );
+            if (cycles.length > 1) {
+              return (
+                <p className="text-sm text-blue-600 mt-2">
+                  Sorteio realizado com {cycles.length} círculos
+                </p>
+              );
+            }
+            return null;
+          })()}
         </CardHeader>
         <CardContent>
           <p className="text-gray-600 mb-6">
@@ -282,6 +328,8 @@ export default function ResultsPage() {
           <div className="space-y-4 mb-6">
             {group && displayOrder.map((participantId) => {
               const participant = group.participants.find(p => p.id === participantId)!;
+              const drawnParticipantId = group.drawResults[participant.id];
+              
               return (
                 <div 
                   key={participant.id}
@@ -299,9 +347,9 @@ export default function ResultsPage() {
                       </div>
                       <div className="flex flex-col">
                         <span className="font-medium">{participant.name}</span>
-                        {showDrawnParticipants && (
+                        {showDrawnParticipants && drawnParticipantId && (
                           <span className="text-xs text-gray-500 italic">
-                            Tirou: {getParticipantById(group.drawResults[participant.id])?.name}
+                            Tirou: {getParticipantById(drawnParticipantId)?.name}
                           </span>
                         )}
                       </div>
