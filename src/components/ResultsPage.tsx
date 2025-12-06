@@ -278,6 +278,20 @@ export default function ResultsPage() {
         )}
         <CardHeader>
           <CardTitle>Resultado do Sorteio</CardTitle>
+          {group && (() => {
+            const cycles = extractCycles(
+              group.drawResults,
+              group.participants.map(p => p.id)
+            );
+            if (cycles.length > 1) {
+              return (
+                <p className="text-sm text-blue-600 mt-2">
+                  Sorteio realizado com {cycles.length} círculos
+                </p>
+              );
+            }
+            return null;
+          })()}
         </CardHeader>
         <CardContent>
           <p className="text-gray-600 mb-6">
