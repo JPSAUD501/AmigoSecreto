@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Settings } from 'lucide-react';
+import { performDraw } from '@/lib/drawUtils';
 
 interface Participant {
   id: string;
@@ -104,44 +105,6 @@ export default function CreateGroupPage() {
     saveGroup();
   };
 
-  const performDraw = (): { [key: string]: string } | null => {
-    const maxAttempts = 1000;
-    
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const shuffled = [...participants];
-      
-      // Algoritmo de Fisher-Yates para embaralhar
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
-      
-      // Tentar criar o sorteio circular
-      const drawResults: { [key: string]: string } = {};
-      let valid = true;
-      
-      for (let i = 0; i < shuffled.length; i++) {
-        const currentPerson = shuffled[i];
-        const nextPerson = shuffled[(i + 1) % shuffled.length];
-        
-        // Verificar se a pessoa pode tirar a próxima
-        const blacklist = currentPerson.blacklist || [];
-        if (blacklist.includes(nextPerson.id)) {
-          valid = false;
-          break;
-        }
-        
-        drawResults[currentPerson.id] = nextPerson.id;
-      }
-      
-      if (valid) {
-        return drawResults;
-      }
-    }
-    
-    return null;
-  };
-
   const finishGroup = () => {
     if (participants.length < 3) {
       alert('É necessário ter pelo menos 3 participantes para o sorteio.');
@@ -149,7 +112,7 @@ export default function CreateGroupPage() {
     }
 
     // Realizar o sorteio com blacklist
-    const drawResults = performDraw();
+    const drawResults = performDraw(participants);
     
     if (!drawResults) {
       alert('Não foi possível realizar o sorteio com as restrições atuais. Por favor, revise as listas de exclusão (blacklists) dos participantes.');
@@ -301,19 +264,18 @@ export default function CreateGroupPage() {
               .map(participant => {
                 const isBlacklisted = currentBlacklistParticipant?.blacklist?.includes(participant.id) || false;
                 return (
-                  <div 
+                  <label 
                     key={participant.id} 
                     className="flex items-center justify-between p-3 bg-gray-50 rounded hover:bg-gray-100 cursor-pointer"
-                    onClick={() => toggleBlacklist(currentBlacklistParticipant!.id, participant.id)}
                   >
                     <span className="font-medium">{participant.name}</span>
                     <input 
                       type="checkbox" 
                       checked={isBlacklisted}
-                      onChange={() => {}}
+                      onChange={() => toggleBlacklist(currentBlacklistParticipant!.id, participant.id)}
                       className="w-5 h-5 cursor-pointer"
                     />
-                  </div>
+                  </label>
                 );
               })}
           </div>

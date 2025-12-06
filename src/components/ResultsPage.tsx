@@ -8,6 +8,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Copy, Download, Share2, Check, Eye, EyeOff } from 'lucide-react';
 import { useRouter } from 'next/navigation'; // Add this import
+import { performDraw } from '@/lib/drawUtils';
 
 interface Participant {
   id: string;
@@ -203,49 +204,10 @@ export default function ResultsPage() {
     doc.save('amigo-secreto.pdf');
   };
 
-  const performDraw = (): { [key: string]: string } | null => {
-    if (!group) return null;
-    const maxAttempts = 1000;
-    
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const shuffled = [...group.participants];
-      
-      // Algoritmo de Fisher-Yates para embaralhar
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
-      
-      // Tentar criar o sorteio circular
-      const drawResults: { [key: string]: string } = {};
-      let valid = true;
-      
-      for (let i = 0; i < shuffled.length; i++) {
-        const currentPerson = shuffled[i];
-        const nextPerson = shuffled[(i + 1) % shuffled.length];
-        
-        // Verificar se a pessoa pode tirar a próxima
-        const blacklist = currentPerson.blacklist || [];
-        if (blacklist.includes(nextPerson.id)) {
-          valid = false;
-          break;
-        }
-        
-        drawResults[currentPerson.id] = nextPerson.id;
-      }
-      
-      if (valid) {
-        return drawResults;
-      }
-    }
-    
-    return null;
-  };
-
   const sortAgain = () => {
     if (!group) return;
   
-    const newDrawResults = performDraw();
+    const newDrawResults = performDraw(group.participants);
     
     if (!newDrawResults) {
       alert('Não foi possível realizar o sorteio com as restrições atuais. Por favor, revise as listas de exclusão (blacklists) dos participantes.');
