@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Settings } from 'lucide-react';
-import { performDraw } from '@/lib/drawUtils';
+import { performDraw, validateDraw } from '@/lib/drawUtils';
 import type { Participant } from '@/types/participant';
 
 export default function CreateGroupPage() {
@@ -20,6 +20,9 @@ export default function CreateGroupPage() {
   const [blacklistDialogOpen, setBlacklistDialogOpen] = useState(false);
   const [currentBlacklistParticipant, setCurrentBlacklistParticipant] = useState<Participant | null>(null);
   const router = useRouter();
+
+  // Calculate draw validation whenever participants change
+  const drawValidation = validateDraw(participants);
 
   useEffect(() => {
     const storedGroup = localStorage.getItem('secretSantaGroup');
@@ -119,8 +122,10 @@ export default function CreateGroupPage() {
   };
 
   const finishGroup = () => {
-    if (participants.length < 3) {
-      alert('É necessário ter pelo menos 3 participantes para o sorteio.');
+    // Validation is already done by the button disabled state
+    // But we keep this check as a safety measure
+    if (!drawValidation.isValid) {
+      alert(drawValidation.reason || 'Não foi possível realizar o sorteio.');
       return;
     }
 
@@ -261,13 +266,20 @@ export default function CreateGroupPage() {
           </div>
 
           <div className="grid grid-cols-1 gap-2">
-            <Button 
-              onClick={finishGroup} 
-              disabled={participants.length < 3}
-              className="w-full"
-            >
-              Finalizar Grupo e Sortear
-            </Button>
+            <div className="relative">
+              <Button 
+                onClick={finishGroup} 
+                disabled={!drawValidation.isValid}
+                className="w-full"
+              >
+                Finalizar Grupo e Sortear
+              </Button>
+              {!drawValidation.isValid && drawValidation.reason && (
+                <div className="mt-2 text-sm text-red-600 text-center">
+                  ⚠️ {drawValidation.reason}
+                </div>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
