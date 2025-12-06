@@ -43,6 +43,31 @@ export const validateDraw = (participants: Participant[]): DrawValidation => {
     }
   }
 
+  // Check for participants with very limited options (can only draw 1 person)
+  for (const participant of participants) {
+    const blacklist = participant.blacklist || [];
+    const otherParticipants = participants.filter(p => p.id !== participant.id);
+    const canDrawCount = otherParticipants.filter(p => !blacklist.includes(p.id)).length;
+    
+    if (canDrawCount === 1) {
+      const onlyOption = otherParticipants.find(p => !blacklist.includes(p.id));
+      if (onlyOption) {
+        const onlyOptionBlacklist = onlyOption.blacklist || [];
+        const onlyOptionCanDrawCount = otherParticipants
+          .filter(p => p.id !== participant.id && !onlyOptionBlacklist.includes(p.id))
+          .length;
+        
+        // Check if the only person they can draw also has only one option, and it's this participant
+        if (onlyOptionCanDrawCount === 1 && !onlyOptionBlacklist.includes(participant.id)) {
+          return {
+            isValid: false,
+            reason: `"${participant.name}" e "${onlyOption.name}" só podem sortear um ao outro, impossibilitando um sorteio circular com todos os participantes.`
+          };
+        }
+      }
+    }
+  }
+
   // Try a quick validation with a few attempts to see if draw is theoretically possible
   // Note: This is called on every participant change, but with typical group sizes (3-20 people)
   // and 100 attempts, the performance impact is minimal compared to the user experience benefit
