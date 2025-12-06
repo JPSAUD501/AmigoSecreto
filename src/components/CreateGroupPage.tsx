@@ -29,6 +29,16 @@ export default function CreateGroupPage() {
     }
   }, []);
 
+  // Sync currentBlacklistParticipant with updated participants state
+  useEffect(() => {
+    if (currentBlacklistParticipant) {
+      const updatedParticipant = participants.find(p => p.id === currentBlacklistParticipant.id);
+      if (updatedParticipant) {
+        setCurrentBlacklistParticipant(updatedParticipant);
+      }
+    }
+  }, [participants, currentBlacklistParticipant]);
+
   const addParticipant = () => {
     if (newParticipantName.trim() === '') return;
 
