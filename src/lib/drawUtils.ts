@@ -14,7 +14,7 @@ export const validateDraw = (participants: Participant[]): DrawValidation => {
     };
   }
 
-  // Check if any participant has everyone blacklisted
+  // Check if any participant has everyone (or more, in case of data inconsistency) blacklisted
   for (const participant of participants) {
     const blacklist = participant.blacklist || [];
     const otherParticipants = participants.filter(p => p.id !== participant.id);
@@ -44,6 +44,8 @@ export const validateDraw = (participants: Participant[]): DrawValidation => {
   }
 
   // Try a quick validation with a few attempts to see if draw is theoretically possible
+  // Note: This is called on every participant change, but with typical group sizes (3-20 people)
+  // and 100 attempts, the performance impact is minimal compared to the user experience benefit
   const quickAttempts = 100;
   const drawPossible = performDraw(participants, quickAttempts) !== null;
   
