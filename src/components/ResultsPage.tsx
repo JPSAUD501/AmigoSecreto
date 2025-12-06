@@ -8,18 +8,8 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Copy, Download, Share2, Check, Eye, EyeOff } from 'lucide-react';
 import { useRouter } from 'next/navigation'; // Add this import
-
-interface Participant {
-  id: string;
-  name: string;
-  phone?: string;
-}
-
-interface SecretSantaGroup {
-  participants: Participant[];
-  drawResults: { [key: string]: string };
-  groupId: string;
-}
+import { performDraw } from '@/lib/drawUtils';
+import type { Participant, SecretSantaGroup } from '@/types/participant';
 
 const getInitials = (name: string) => {
   const names = name.split(' ').filter(n => n.length > 0);
@@ -159,15 +149,25 @@ export default function ResultsPage() {
     const tableData = group?.participants.map(participant => {
       const drawnParticipantId = group.drawResults[participant.id];
       const drawnParticipant = getParticipantById(drawnParticipantId);
+      
+      // Get blacklist names
+      const blacklistNames = participant.blacklist && participant.blacklist.length > 0
+        ? participant.blacklist
+            .map(id => getParticipantById(id)?.name)
+            .filter(name => name)
+            .join(', ')
+        : 'Nenhuma';
+      
       return [
         participant.name,
-        drawnParticipant?.name || ''
+        drawnParticipant?.name || '',
+        blacklistNames
       ];
     });
 
     autoTable(doc, {
       startY: tableStartY,
-      head: [['Participante', 'Tirou']],
+      head: [['Participante', 'Tirou', 'Restrições']],
       body: tableData,
       theme: 'grid',
       styles: {
@@ -181,8 +181,9 @@ export default function ResultsPage() {
         fontStyle: 'bold',
       },
       columnStyles: {
-        0: { fontStyle: 'bold', cellWidth: 95 },
-        1: { fontStyle: 'bold', cellWidth: 95 }
+        0: { fontStyle: 'bold', cellWidth: 60 },
+        1: { fontStyle: 'bold', cellWidth: 60 },
+        2: { cellWidth: 70 }
       },
     });
 
@@ -205,20 +206,11 @@ export default function ResultsPage() {
   const sortAgain = () => {
     if (!group) return;
   
-    const shuffledParticipants = [...group.participants];
+    const newDrawResults = performDraw(group.participants);
     
-    // Fisher-Yates shuffle for draw results
-    for (let i = shuffledParticipants.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffledParticipants[i], shuffledParticipants[j]] = [shuffledParticipants[j], shuffledParticipants[i]];
-    }
-  
-    // Prepare new draw results
-    const newDrawResults: { [key: string]: string } = {};
-    for (let i = 0; i < shuffledParticipants.length; i++) {
-      const currentPerson = shuffledParticipants[i];
-      const nextPerson = shuffledParticipants[(i + 1) % shuffledParticipants.length];
-      newDrawResults[currentPerson.id] = nextPerson.id;
+    if (!newDrawResults) {
+      alert('Não foi possível realizar o sorteio com as restrições atuais. Por favor, revise as listas de exclusão (blacklists) dos participantes.');
+      return;
     }
   
     // Shuffle display order separately

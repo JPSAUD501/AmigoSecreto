@@ -5,12 +5,10 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-
-interface Participant {
-  id: string;
-  name: string;
-  phone?: string; // Adicionar propriedade opcional 'phone'
-}
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Settings } from 'lucide-react';
+import { performDraw } from '@/lib/drawUtils';
+import type { Participant } from '@/types/participant';
 
 export default function CreateGroupPage() {
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -19,6 +17,8 @@ export default function CreateGroupPage() {
   const [editingParticipantId, setEditingParticipantId] = useState<string | null>(null);
   const [editedName, setEditedName] = useState('');
   const [editedPhone, setEditedPhone] = useState('');
+  const [blacklistDialogOpen, setBlacklistDialogOpen] = useState(false);
+  const [currentBlacklistParticipant, setCurrentBlacklistParticipant] = useState<Participant | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -28,6 +28,19 @@ export default function CreateGroupPage() {
       setParticipants(group.participants);
     }
   }, []);
+
+  // Sync currentBlacklistParticipant with updated participants state
+  useEffect(() => {
+    if (currentBlacklistParticipant) {
+      const updatedParticipant = participants.find(p => p.id === currentBlacklistParticipant.id);
+      if (updatedParticipant) {
+        setCurrentBlacklistParticipant(updatedParticipant);
+      } else {
+        // Participant was removed, clear the current selection
+        setCurrentBlacklistParticipant(null);
+      }
+    }
+  }, [participants]); // Only depend on participants to avoid infinite loops
 
   const addParticipant = () => {
     if (newParticipantName.trim() === '') return;
@@ -44,10 +57,16 @@ export default function CreateGroupPage() {
       return;
     }
 
-    setParticipants([...participants, newParticipant]);
+    const updatedParticipants = [...participants, newParticipant];
+    setParticipants(updatedParticipants);
     setNewParticipantName('');
     setNewParticipantPhone(''); // Limpar campo do telefone após adicionar
-    saveGroup();
+    
+    // Save with updated participants list
+    localStorage.setItem('secretSantaGroup', JSON.stringify({
+      participants: updatedParticipants,
+      groupId: Date.now().toString()
+    }));
   };
 
   const removeParticipant = (id: string) => {
@@ -75,28 +94,42 @@ export default function CreateGroupPage() {
     setEditedPhone('');
   };
 
+  const openBlacklistDialog = (participant: Participant) => {
+    setCurrentBlacklistParticipant(participant);
+    setBlacklistDialogOpen(true);
+  };
+
+  const toggleBlacklist = (participantId: string, blacklistedId: string) => {
+    setParticipants(participants.map(p => {
+      if (p.id === participantId) {
+        const currentBlacklist = p.blacklist || [];
+        const newBlacklist = currentBlacklist.includes(blacklistedId)
+          ? currentBlacklist.filter(id => id !== blacklistedId)
+          : [...currentBlacklist, blacklistedId];
+        return { ...p, blacklist: newBlacklist };
+      }
+      return p;
+    }));
+  };
+
+  const closeBlacklistDialog = () => {
+    setBlacklistDialogOpen(false);
+    setCurrentBlacklistParticipant(null);
+    saveGroup();
+  };
+
   const finishGroup = () => {
     if (participants.length < 3) {
       alert('É necessário ter pelo menos 3 participantes para o sorteio.');
       return;
     }
 
-    // Realizar o sorteio
-    const shuffledParticipants = [...participants];
+    // Realizar o sorteio com blacklist
+    const drawResults = performDraw(participants);
     
-    // Algoritmo de Fisher-Yates para embaralhar
-    for (let i = shuffledParticipants.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffledParticipants[i], shuffledParticipants[j]] = [shuffledParticipants[j], shuffledParticipants[i]];
-    }
-
-    // Preparar os resultados do sorteio
-    const drawResults: { [key: string]: string } = {};
-    for (let i = 0; i < shuffledParticipants.length; i++) {
-      const currentPerson = shuffledParticipants[i];
-      const nextPerson = shuffledParticipants[(i + 1) % shuffledParticipants.length];
-      
-      drawResults[currentPerson.id] = nextPerson.id;
+    if (!drawResults) {
+      alert('Não foi possível realizar o sorteio com as restrições atuais. Por favor, revise as listas de exclusão (blacklists) dos participantes.');
+      return;
     }
 
     // Salvar no localStorage para manter na sessão
@@ -134,6 +167,11 @@ export default function CreateGroupPage() {
               type="text" 
               value={newParticipantName}
               onChange={(e) => setNewParticipantName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  addParticipant();
+                }
+              }}
               placeholder="Nome do participante" 
               className="mb-2"
             />
@@ -141,6 +179,11 @@ export default function CreateGroupPage() {
               type="tel"
               value={newParticipantPhone}
               onChange={(e) => setNewParticipantPhone(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  addParticipant();
+                }
+              }}
               placeholder="Número de telefone (opcional)"
               className="mb-2"
             />
@@ -186,8 +229,22 @@ export default function CreateGroupPage() {
                           {participant.phone && (
                           <span className="text-sm text-gray-600 mt-1 block">{participant.phone}</span>
                           )}
+                          {participant.blacklist && participant.blacklist.length > 0 && (
+                            <span className="text-xs text-gray-500 mt-1 block">
+                              Restrições: {participant.blacklist.length}
+                            </span>
+                          )}
                         </div>
                         <div className="flex flex-col gap-2 w-[100px]">
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => openBlacklistDialog(participant)}
+                            title="Configurar restrições"
+                          >
+                            <Settings className="w-4 h-4 mr-1" />
+                            Config
+                          </Button>
                           <Button size="sm" variant="outline" onClick={() => startEditing(participant)}>
                             Editar
                           </Button>
@@ -214,6 +271,45 @@ export default function CreateGroupPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Blacklist Dialog */}
+      <Dialog open={blacklistDialogOpen} onOpenChange={setBlacklistDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Configurar Restrições</DialogTitle>
+            <DialogDescription>
+              Selecione as pessoas que <strong>{currentBlacklistParticipant?.name}</strong> NÃO pode sortear.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[400px] overflow-y-auto">
+            {participants
+              .filter(p => p.id !== currentBlacklistParticipant?.id)
+              .map(participant => {
+                const isBlacklisted = currentBlacklistParticipant?.blacklist?.includes(participant.id) || false;
+                return (
+                  <label 
+                    key={participant.id} 
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded hover:bg-gray-100 cursor-pointer"
+                  >
+                    <span className="font-medium">{participant.name}</span>
+                    <input 
+                      type="checkbox" 
+                      checked={isBlacklisted}
+                      onChange={() => currentBlacklistParticipant && toggleBlacklist(currentBlacklistParticipant.id, participant.id)}
+                      className="w-5 h-5 cursor-pointer"
+                      aria-label={`Impedir que ${currentBlacklistParticipant?.name} sorteie ${participant.name}`}
+                    />
+                  </label>
+                );
+              })}
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button onClick={closeBlacklistDialog}>
+              Fechar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
