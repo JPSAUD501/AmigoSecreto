@@ -35,9 +35,12 @@ export default function CreateGroupPage() {
       const updatedParticipant = participants.find(p => p.id === currentBlacklistParticipant.id);
       if (updatedParticipant) {
         setCurrentBlacklistParticipant(updatedParticipant);
+      } else {
+        // Participant was removed, clear the current selection
+        setCurrentBlacklistParticipant(null);
       }
     }
-  }, [participants, currentBlacklistParticipant]);
+  }, [participants]); // Only depend on participants to avoid infinite loops
 
   const addParticipant = () => {
     if (newParticipantName.trim() === '') return;
