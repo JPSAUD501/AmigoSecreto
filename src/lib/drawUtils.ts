@@ -6,6 +6,33 @@ export interface DrawValidation {
   canUseNonCircular?: boolean; // Indicates if non-circular draw is possible as fallback
 }
 
+// Extract cycles from draw results
+export const extractCycles = (drawResults: { [key: string]: string }, participantIds: string[]): string[][] => {
+  const visited = new Set<string>();
+  const cycles: string[][] = [];
+  
+  for (const startId of participantIds) {
+    if (visited.has(startId)) continue;
+    
+    const cycle: string[] = [];
+    let currentId = startId;
+    
+    while (!visited.has(currentId)) {
+      visited.add(currentId);
+      cycle.push(currentId);
+      currentId = drawResults[currentId];
+      
+      if (!currentId) break; // Safety check
+    }
+    
+    if (cycle.length > 0) {
+      cycles.push(cycle);
+    }
+  }
+  
+  return cycles;
+};
+
 export const validateDraw = (participants: Participant[]): DrawValidation => {
   // Check minimum participants
   if (participants.length < 3) {
@@ -77,25 +104,38 @@ export const validateDraw = (participants: Participant[]): DrawValidation => {
   const drawPossible = performDraw(participants, quickAttempts) !== null;
   
   if (!drawPossible) {
-    // Try to detect isolated groups that can only draw within themselves
-    const isolatedGroups = detectIsolatedGroups(participants);
+    // Try non-circular draw to see if everyone can participate
+    const nonCircularPossible = performNonCircularDraw(participants) !== null;
     
-    if (isolatedGroups.length > 0) {
-      const groupNames = isolatedGroups.map(group => 
-        group.map(p => `"${p.name}"`).join(', ')
-      ).join(' e ');
+    if (nonCircularPossible) {
+      // Everyone can participate, but not in a single cycle
+      // Try to detect isolated groups for better error message
+      const isolatedGroups = detectIsolatedGroups(participants);
+      
+      if (isolatedGroups.length > 0) {
+        const groupNames = isolatedGroups.map(group => 
+          group.map(p => `"${p.name}"`).join(', ')
+        ).join(' e ');
+        
+        return {
+          isValid: false,
+          reason: `Os seguintes grupos só podem sortear entre si, impossibilitando um sorteio circular: ${groupNames}.`,
+          canUseNonCircular: true
+        };
+      }
       
       return {
         isValid: false,
-        reason: `Os seguintes grupos só podem sortear entre si, impossibilitando um sorteio circular: ${groupNames}.`,
+        reason: 'Não é possível realizar um sorteio circular com as restrições atuais, mas é possível fazer um sorteio com múltiplos círculos.',
         canUseNonCircular: true
       };
     }
     
+    // Not even non-circular is possible - someone cannot participate
     return {
       isValid: false,
-      reason: 'As restrições configuradas tornam o sorteio impossível. Por favor, revise as configurações.',
-      canUseNonCircular: true // Allow non-circular as fallback
+      reason: 'As restrições configuradas tornam impossível que todos participem do sorteio. Por favor, revise as configurações.',
+      canUseNonCircular: false
     };
   }
 
@@ -145,51 +185,115 @@ function detectIsolatedGroups(participants: Participant[]): Participant[][] {
   return groups;
 }
 
-// Perform a non-circular draw (not everyone gets assigned, but respects blacklists)
+// Perform a multi-cycle draw where everyone participates in the minimum number of cycles
 export const performNonCircularDraw = (participants: Participant[]): { [key: string]: string } | null => {
   const maxAttempts = 1000;
   
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const availableGivers = new Set(participants.map(p => p.id));
-    const availableReceivers = new Set(participants.map(p => p.id));
     const drawResults: { [key: string]: string } = {};
+    const assigned = new Set<string>();
+    const remaining = new Set(participants.map(p => p.id));
     
-    // Shuffle participants to randomize assignment order
-    const shuffledParticipants = [...participants];
-    for (let i = shuffledParticipants.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffledParticipants[i], shuffledParticipants[j]] = [shuffledParticipants[j], shuffledParticipants[i]];
-    }
-    
-    // Try to assign each person
-    for (const participant of shuffledParticipants) {
-      if (!availableGivers.has(participant.id)) continue;
+    // Try to create cycles until everyone is assigned
+    while (remaining.size > 0) {
+      // Pick a random starting participant from remaining
+      const remainingArray = Array.from(remaining);
+      const startId = remainingArray[Math.floor(Math.random() * remainingArray.length)];
       
-      const blacklist = participant.blacklist || [];
-      const possibleReceivers = Array.from(availableReceivers).filter(
-        receiverId => receiverId !== participant.id && !blacklist.includes(receiverId)
-      );
+      // Try to build a cycle starting from this participant
+      const cycle = buildCycle(participants, startId, remaining);
       
-      if (possibleReceivers.length > 0) {
-        // Pick a random receiver
-        const randomIndex = Math.floor(Math.random() * possibleReceivers.length);
-        const selectedReceiver = possibleReceivers[randomIndex];
-        
-        drawResults[participant.id] = selectedReceiver;
-        availableGivers.delete(participant.id);
-        availableReceivers.delete(selectedReceiver);
+      if (!cycle || cycle.length < 2) {
+        // Cannot build a cycle with remaining participants
+        break;
+      }
+      
+      // Add this cycle to results
+      for (let i = 0; i < cycle.length; i++) {
+        const currentId = cycle[i];
+        const nextId = cycle[(i + 1) % cycle.length];
+        drawResults[currentId] = nextId;
+        assigned.add(currentId);
+        remaining.delete(currentId);
       }
     }
     
-    // Check if we managed to assign at least most participants (e.g., 80%)
-    const assignedCount = Object.keys(drawResults).length;
-    if (assignedCount >= Math.floor(participants.length * 0.8)) {
+    // Check if everyone was assigned
+    if (assigned.size === participants.length) {
       return drawResults;
     }
   }
   
   return null;
 };
+
+// Helper function to build a cycle starting from a given participant
+function buildCycle(
+  participants: Participant[],
+  startId: string,
+  availableIds: Set<string>
+): string[] | null {
+  const maxCycleAttempts = 100;
+  
+  for (let attempt = 0; attempt < maxCycleAttempts; attempt++) {
+    const cycle: string[] = [startId];
+    const usedInCycle = new Set<string>([startId]);
+    let currentId = startId;
+    
+    // Try to build a cycle
+    while (true) {
+      const current = participants.find(p => p.id === currentId);
+      if (!current) break;
+      
+      const blacklist = current.blacklist || [];
+      
+      // Find possible next participants (excluding those already in cycle)
+      const possibleNext = Array.from(availableIds).filter(id => 
+        !usedInCycle.has(id) && !blacklist.includes(id)
+      );
+      
+      // Check if we can close the cycle back to start
+      const canCloseToStart = !blacklist.includes(startId);
+      
+      // If no possible next participants
+      if (possibleNext.length === 0) {
+        // Try to close the cycle if we can and have at least 2 people
+        if (canCloseToStart && cycle.length >= 2) {
+          return cycle;
+        }
+        // Dead end, try again with a new attempt
+        break;
+      }
+      
+      // Decide whether to close the cycle or continue
+      if (canCloseToStart && cycle.length >= 2) {
+        // For small cycles (2-3 people), close more readily
+        // For larger cycles, be more likely to close as it grows
+        const closeChance = cycle.length === 2 ? 0.5 : Math.min(0.2 + (cycle.length * 0.15), 0.85);
+        if (Math.random() < closeChance) {
+          return cycle;
+        }
+      }
+      
+      // Pick next participant
+      const nextId = possibleNext[Math.floor(Math.random() * possibleNext.length)];
+      cycle.push(nextId);
+      usedInCycle.add(nextId);
+      currentId = nextId;
+      
+      // Safety check - if cycle includes all available, must close
+      if (cycle.length >= availableIds.size) {
+        if (canCloseToStart) {
+          return cycle;
+        }
+        // Can't close, this attempt failed
+        break;
+      }
+    }
+  }
+  
+  return null;
+}
 
 export const performDraw = (participants: Participant[], maxAttempts = 1000): { [key: string]: string } | null => {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {

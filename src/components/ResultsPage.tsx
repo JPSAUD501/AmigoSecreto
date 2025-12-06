@@ -8,7 +8,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Copy, Download, Share2, Check, Eye, EyeOff } from 'lucide-react';
 import { useRouter } from 'next/navigation'; // Add this import
-import { performDraw } from '@/lib/drawUtils';
+import { performDraw, extractCycles } from '@/lib/drawUtils';
 import type { Participant, SecretSantaGroup } from '@/types/participant';
 
 const getInitials = (name: string) => {
@@ -121,50 +121,61 @@ export default function ResultsPage() {
 
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(14);
-    const assignedCount = Object.keys(group.drawResults).length;
     doc.text(`Total de participantes: ${group?.participants.length || 0}`, 14, 50);
-    doc.text(`Participantes sorteados: ${assignedCount}`, 14, 58);
 
-    // Check if it's a circular draw by seeing if we can form a complete cycle
-    const isCircular = assignedCount === group.participants.length;
-    let tableStartY = 66;
-
-    if (isCircular) {
-      // Generate the cycle of names for circular draws
-      const cycle = [];
-      let currentParticipantId = group.participants[0].id;
-
-      do {
-        const participant = getParticipantById(currentParticipantId);
-        if (!participant) break;
-        cycle.push(participant.name);
-        currentParticipantId = group.drawResults[currentParticipantId];
-        if (!currentParticipantId) break; // Safety check
-      } while (currentParticipantId !== group.participants[0].id && cycle.length < group.participants.length + 1);
-
-      // Close the cycle by adding the first participant again
-      if (cycle.length > 0 && currentParticipantId === group.participants[0].id) {
-        cycle.push(cycle[0]);
-      }
-
-      // Create a string representation of the cycle with line breaks
+    // Extract cycles from the draw results
+    const cycles = extractCycles(
+      group.drawResults, 
+      group.participants.map(p => p.id)
+    );
+    
+    let tableStartY = 58;
+    
+    // Display cycles
+    if (cycles.length === 1) {
+      // Single cycle - traditional circular draw
+      const cycle = cycles[0].map(id => {
+        const participant = getParticipantById(id);
+        return participant?.name || '';
+      });
+      cycle.push(cycle[0]); // Close the cycle
+      
       const cycleString = cycle.join(' > ');
       const cycleLines = doc.splitTextToSize(cycleString, doc.internal.pageSize.width - 28);
-
-      // Add the cycle to the PDF
+      
       doc.setFontSize(14);
-      doc.text('Ciclo de Participantes:', 14, 68);
+      doc.text('Ciclo de Participantes:', 14, 66);
       doc.setFontSize(12);
-      doc.text(cycleLines, 14, 78);
-
+      doc.text(cycleLines, 14, 76);
+      
       const cycleHeight = doc.getTextDimensions(cycleLines.join(' ')).h * cycleLines.length;
-      tableStartY = 78 + cycleHeight + 5;
-    } else {
+      tableStartY = 76 + cycleHeight + 5;
+    } else if (cycles.length > 1) {
+      // Multiple cycles - non-circular draw
       doc.setFontSize(12);
-      doc.setTextColor(200, 0, 0);
-      doc.text('(Sorteio não-circular - nem todos participaram)', 14, 66);
+      doc.setTextColor(0, 0, 150);
+      doc.text(`(Sorteio com ${cycles.length} círculos)`, 14, 58);
       doc.setTextColor(0, 0, 0);
-      tableStartY = 74;
+      
+      let currentY = 66;
+      cycles.forEach((cycle, index) => {
+        const cycleNames = cycle.map(id => {
+          const participant = getParticipantById(id);
+          return participant?.name || '';
+        });
+        cycleNames.push(cycleNames[0]); // Close the cycle
+        
+        const cycleString = `Círculo ${index + 1}: ${cycleNames.join(' > ')}`;
+        const cycleLines = doc.splitTextToSize(cycleString, doc.internal.pageSize.width - 28);
+        
+        doc.setFontSize(12);
+        doc.text(cycleLines, 14, currentY);
+        
+        const cycleHeight = doc.getTextDimensions(cycleLines.join(' ')).h * cycleLines.length;
+        currentY += cycleHeight + 3;
+      });
+      
+      tableStartY = currentY + 5;
     }
 
     const tableData = group?.participants.map(participant => {
@@ -181,7 +192,7 @@ export default function ResultsPage() {
       
       return [
         participant.name,
-        drawnParticipant?.name || 'Não sorteado',
+        drawnParticipant?.name || 'Erro',
         blacklistNames
       ];
     });
@@ -304,12 +315,11 @@ export default function ResultsPage() {
             {group && displayOrder.map((participantId) => {
               const participant = group.participants.find(p => p.id === participantId)!;
               const drawnParticipantId = group.drawResults[participant.id];
-              const wasAssigned = drawnParticipantId !== undefined;
               
               return (
                 <div 
                   key={participant.id}
-                  className={`p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:justify-between ${wasAssigned ? 'bg-gray-50' : 'bg-red-50'}`}
+                  className="bg-gray-50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:justify-between"
                 >
                   <div className="flex items-center gap-3 w-full sm:w-auto flex-col sm:flex-row">
                     <div className="flex items-center gap-3">
@@ -323,58 +333,42 @@ export default function ResultsPage() {
                       </div>
                       <div className="flex flex-col">
                         <span className="font-medium">{participant.name}</span>
-                        {showDrawnParticipants && wasAssigned && (
+                        {showDrawnParticipants && drawnParticipantId && (
                           <span className="text-xs text-gray-500 italic">
                             Tirou: {getParticipantById(drawnParticipantId)?.name}
-                          </span>
-                        )}
-                        {showDrawnParticipants && !wasAssigned && (
-                          <span className="text-xs text-red-500 italic">
-                            Não sorteado
-                          </span>
-                        )}
-                        {!wasAssigned && (
-                          <span className="text-xs text-red-600 mt-1">
-                            Não participou do sorteio
                           </span>
                         )}
                       </div>
                     </div>
                   </div>
-                  {wasAssigned ? (
-                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                  <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                    <Button
+                      size="sm"
+                      onClick={() => copyLink(participant.id)}
+                      variant="outline"
+                      className="w-full sm:w-auto"
+                    >
+                      {copiedLinks[participant.id] ? (
+                        'Copiado!'
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4 mr-1" />
+                          Copiar Link
+                        </>
+                      )}
+                    </Button>
+                    {participant.phone && (
                       <Button
                         size="sm"
-                        onClick={() => copyLink(participant.id)}
+                        onClick={() => sendWhatsApp(participant.id)}
                         variant="outline"
                         className="w-full sm:w-auto"
                       >
-                        {copiedLinks[participant.id] ? (
-                          'Copiado!'
-                        ) : (
-                          <>
-                            <Copy className="w-4 h-4 mr-1" />
-                            Copiar Link
-                          </>
-                        )}
+                        <Share2 className="w-4 h-4 mr-1" />
+                        WhatsApp
                       </Button>
-                      {participant.phone && (
-                        <Button
-                          size="sm"
-                          onClick={() => sendWhatsApp(participant.id)}
-                          variant="outline"
-                          className="w-full sm:w-auto"
-                        >
-                          <Share2 className="w-4 h-4 mr-1" />
-                          WhatsApp
-                        </Button>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-red-600 italic">
-                      Sem link (não sorteado)
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               );
             })}
