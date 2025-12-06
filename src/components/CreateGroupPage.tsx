@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Settings } from 'lucide-react';
-import { performDraw, validateDraw } from '@/lib/drawUtils';
+import { performDraw, performNonCircularDraw, validateDraw } from '@/lib/drawUtils';
 import type { Participant } from '@/types/participant';
 
 export default function CreateGroupPage() {
@@ -148,6 +148,26 @@ export default function CreateGroupPage() {
     router.push('/group/result');
   };
 
+  const finishGroupNonCircular = () => {
+    // Perform non-circular draw as fallback
+    const drawResults = performNonCircularDraw(participants);
+    
+    if (!drawResults) {
+      alert('Não foi possível realizar o sorteio mesmo sem o formato circular. Por favor, revise as restrições.');
+      return;
+    }
+
+    // Salvar no localStorage para manter na sessão
+    localStorage.setItem('secretSantaGroup', JSON.stringify({
+      participants: participants,
+      drawResults: drawResults,
+      groupId: Date.now().toString()
+    }));
+
+    // Navegar para a página de resultados
+    router.push('/group/result');
+  };
+
   const saveGroup = () => {
     if (participants.length === 0) {
       alert('Adicione pelo menos um participante antes de salvar.');
@@ -274,6 +294,15 @@ export default function CreateGroupPage() {
               >
                 Finalizar Grupo e Sortear
               </Button>
+              {!drawValidation.isValid && drawValidation.canUseNonCircular && (
+                <Button 
+                  onClick={finishGroupNonCircular}
+                  variant="outline"
+                  className="w-full mt-2"
+                >
+                  Sortear Mesmo Assim (sem sorteio circular)
+                </Button>
+              )}
               {!drawValidation.isValid && drawValidation.reason && (
                 <div className="mt-2 text-sm text-red-600 text-center">
                   ⚠️ {drawValidation.reason}

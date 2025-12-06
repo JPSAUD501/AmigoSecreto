@@ -3,6 +3,7 @@ import type { Participant } from '@/types/participant';
 export interface DrawValidation {
   isValid: boolean;
   reason?: string;
+  canUseNonCircular?: boolean; // Indicates if non-circular draw is possible as fallback
 }
 
 export const validateDraw = (participants: Participant[]): DrawValidation => {
@@ -61,7 +62,8 @@ export const validateDraw = (participants: Participant[]): DrawValidation => {
         if (onlyOptionCanDrawCount === 1 && !onlyOptionBlacklist.includes(participant.id)) {
           return {
             isValid: false,
-            reason: `"${participant.name}" e "${onlyOption.name}" só podem sortear um ao outro, impossibilitando um sorteio circular com todos os participantes.`
+            reason: `"${participant.name}" e "${onlyOption.name}" só podem sortear um ao outro, impossibilitando um sorteio circular com todos os participantes.`,
+            canUseNonCircular: true
           };
         }
       }
@@ -75,13 +77,118 @@ export const validateDraw = (participants: Participant[]): DrawValidation => {
   const drawPossible = performDraw(participants, quickAttempts) !== null;
   
   if (!drawPossible) {
+    // Try to detect isolated groups that can only draw within themselves
+    const isolatedGroups = detectIsolatedGroups(participants);
+    
+    if (isolatedGroups.length > 0) {
+      const groupNames = isolatedGroups.map(group => 
+        group.map(p => `"${p.name}"`).join(', ')
+      ).join(' e ');
+      
+      return {
+        isValid: false,
+        reason: `Os seguintes grupos só podem sortear entre si, impossibilitando um sorteio circular: ${groupNames}.`,
+        canUseNonCircular: true
+      };
+    }
+    
     return {
       isValid: false,
-      reason: 'As restrições configuradas tornam o sorteio impossível. Por favor, revise as configurações.'
+      reason: 'As restrições configuradas tornam o sorteio impossível. Por favor, revise as configurações.',
+      canUseNonCircular: true // Allow non-circular as fallback
     };
   }
 
   return { isValid: true };
+};
+
+// Detect groups of participants that can only draw within themselves
+function detectIsolatedGroups(participants: Participant[]): Participant[][] {
+  const groups: Participant[][] = [];
+  const visited = new Set<string>();
+  
+  for (const participant of participants) {
+    if (visited.has(participant.id)) continue;
+    
+    // Find all participants this person can reach (directly or indirectly)
+    const reachable = new Set<string>();
+    const toVisit = [participant.id];
+    
+    while (toVisit.length > 0) {
+      const currentId = toVisit.pop()!;
+      if (reachable.has(currentId)) continue;
+      reachable.add(currentId);
+      
+      const current = participants.find(p => p.id === currentId);
+      if (!current) continue;
+      
+      const blacklist = current.blacklist || [];
+      const canDraw = participants
+        .filter(p => p.id !== currentId && !blacklist.includes(p.id))
+        .map(p => p.id);
+      
+      for (const targetId of canDraw) {
+        if (!reachable.has(targetId)) {
+          toVisit.push(targetId);
+        }
+      }
+    }
+    
+    // If this group is isolated (not all participants), add it
+    if (reachable.size < participants.length && reachable.size > 1) {
+      const groupParticipants = participants.filter(p => reachable.has(p.id));
+      groups.push(groupParticipants);
+      groupParticipants.forEach(p => visited.add(p.id));
+    }
+  }
+  
+  return groups;
+}
+
+// Perform a non-circular draw (not everyone gets assigned, but respects blacklists)
+export const performNonCircularDraw = (participants: Participant[]): { [key: string]: string } | null => {
+  const maxAttempts = 1000;
+  
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const availableGivers = new Set(participants.map(p => p.id));
+    const availableReceivers = new Set(participants.map(p => p.id));
+    const drawResults: { [key: string]: string } = {};
+    
+    // Shuffle participants to randomize assignment order
+    const shuffledParticipants = [...participants];
+    for (let i = shuffledParticipants.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledParticipants[i], shuffledParticipants[j]] = [shuffledParticipants[j], shuffledParticipants[i]];
+    }
+    
+    // Try to assign each person
+    for (const participant of shuffledParticipants) {
+      if (!availableGivers.has(participant.id)) continue;
+      
+      const blacklist = participant.blacklist || [];
+      const possibleReceivers = Array.from(availableReceivers).filter(
+        receiverId => receiverId !== participant.id && !blacklist.includes(receiverId)
+      );
+      
+      if (possibleReceivers.length > 0) {
+        // Pick a random receiver
+        const randomIndex = Math.floor(Math.random() * possibleReceivers.length);
+        const selectedReceiver = possibleReceivers[randomIndex];
+        
+        drawResults[participant.id] = selectedReceiver;
+        availableGivers.delete(participant.id);
+        availableReceivers.delete(selectedReceiver);
+      }
+    }
+    
+    // Check if we managed to assign at least most participants (e.g., 80%)
+    const assignedCount = Object.keys(drawResults).length;
+    if (assignedCount >= Math.floor(participants.length * 0.8)) {
+      return drawResults;
+    }
+  }
+  
+  return null;
 };
 
 export const performDraw = (participants: Participant[], maxAttempts = 1000): { [key: string]: string } | null => {
