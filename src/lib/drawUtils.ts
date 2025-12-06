@@ -1,9 +1,4 @@
-interface Participant {
-  id: string;
-  name: string;
-  phone?: string;
-  blacklist?: string[];
-}
+import type { Participant } from '@/types/participant';
 
 export const performDraw = (participants: Participant[]): { [key: string]: string } | null => {
   const maxAttempts = 1000;

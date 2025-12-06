@@ -9,19 +9,7 @@ import autoTable from 'jspdf-autotable';
 import { Copy, Download, Share2, Check, Eye, EyeOff } from 'lucide-react';
 import { useRouter } from 'next/navigation'; // Add this import
 import { performDraw } from '@/lib/drawUtils';
-
-interface Participant {
-  id: string;
-  name: string;
-  phone?: string;
-  blacklist?: string[];
-}
-
-interface SecretSantaGroup {
-  participants: Participant[];
-  drawResults: { [key: string]: string };
-  groupId: string;
-}
+import type { Participant, SecretSantaGroup } from '@/types/participant';
 
 const getInitials = (name: string) => {
   const names = name.split(' ').filter(n => n.length > 0);

@@ -8,13 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Settings } from 'lucide-react';
 import { performDraw } from '@/lib/drawUtils';
-
-interface Participant {
-  id: string;
-  name: string;
-  phone?: string; // Adicionar propriedade opcional 'phone'
-  blacklist?: string[]; // IDs de participantes que não podem ser sorteados
-}
+import type { Participant } from '@/types/participant';
 
 export default function CreateGroupPage() {
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -272,8 +266,9 @@ export default function CreateGroupPage() {
                     <input 
                       type="checkbox" 
                       checked={isBlacklisted}
-                      onChange={() => toggleBlacklist(currentBlacklistParticipant!.id, participant.id)}
+                      onChange={() => currentBlacklistParticipant && toggleBlacklist(currentBlacklistParticipant.id, participant.id)}
                       className="w-5 h-5 cursor-pointer"
+                      aria-label={`Impedir que ${currentBlacklistParticipant?.name} sorteie ${participant.name}`}
                     />
                   </label>
                 );
