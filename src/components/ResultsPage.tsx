@@ -63,7 +63,12 @@ export default function ResultsPage() {
     const userEncoded = btoa(encodeURIComponent(participant.name));
     const resultEncoded = btoa(encodeURIComponent(drawnParticipant.name));
 
-    return `${baseUrl}/result?u=${userEncoded}&f=${resultEncoded}`;
+    const params = new URLSearchParams({
+      u: userEncoded,
+      f: resultEncoded
+    });
+
+    return `${baseUrl}/result?${params.toString()}`;
   };
 
   const copyLink = (participantId: string) => {
