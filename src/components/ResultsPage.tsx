@@ -60,8 +60,8 @@ export default function ResultsPage() {
     if (!participant || !drawnParticipant) return '';
 
     const baseUrl = window.location.origin;
-    const userEncoded = btoa(encodeURIComponent(participant.name));
-    const resultEncoded = btoa(encodeURIComponent(drawnParticipant.name));
+    const userEncoded = encodeURIComponent(btoa(encodeURIComponent(participant.name)));
+    const resultEncoded = encodeURIComponent(btoa(encodeURIComponent(drawnParticipant.name)));
 
     return `${baseUrl}/result?u=${userEncoded}&f=${resultEncoded}`;
   };
